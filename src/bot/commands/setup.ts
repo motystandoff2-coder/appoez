@@ -92,18 +92,42 @@ export async function handleSetup(guild: Guild) {
         parent: category.id,
     });
 
-    // 5. Save config to DB
+    // 5. Create commands channel (only bots and admins can write, everyone can read)
+    const commandsChannel = await guild.channels.create({
+        name: 'команды',
+        type: ChannelType.GuildText,
+        parent: category.id,
+        permissionOverwrites: [
+            {
+                id: guild.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                deny: [PermissionFlagsBits.SendMessages],
+            },
+            {
+                id: kingRole!.id,
+                allow: [PermissionFlagsBits.SendMessages],
+            },
+            {
+                id: almostKingRole!.id,
+                allow: [PermissionFlagsBits.SendMessages],
+            },
+        ],
+    });
+
+    // 6. Save config to DB
     await db.insert(guildConfigs).values({
         guildId: guild.id,
         logsChannelId: voiceLogs.id,
         generatorChannelId: generator.id,
         categoryId: category.id,
+        commandsChannelId: commandsChannel.id,
     }).onConflictDoUpdate({
         target: guildConfigs.guildId,
         set: {
             logsChannelId: voiceLogs.id,
             generatorChannelId: generator.id,
             categoryId: category.id,
+            commandsChannelId: commandsChannel.id,
         }
     });
 
@@ -142,5 +166,5 @@ export async function handleSetup(guild: Guild) {
 
     await generalChat.send({ embeds: [embed], components: [row1, row2] });
 
-    return { generalChat, voiceLogs, generator };
+    return { generalChat, voiceLogs, generator, commandsChannel };
 }

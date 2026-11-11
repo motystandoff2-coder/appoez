@@ -10,7 +10,7 @@ import {
     EmbedBuilder
 } from 'discord.js';
 import { db } from '@/db';
-import { privateRooms } from '@/db/schema';
+import { privateRooms, guildConfigs } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { handleMute, handleDelete, handleStats } from '../commands/handlers';
 import { handleSetup } from '../commands/setup';
@@ -19,10 +19,31 @@ import { handlePlay } from '../commands/music';
 export async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
+
+        // Получаем конфиг сервера
+        const config = interaction.guildId ? await db.query.guildConfigs.findFirst({
+            where: eq(guildConfigs.guildId, interaction.guildId),
+        }) : null;
+
+        // Команды только для админов (можно использовать в любом канале)
+        const adminOnlyCommands = ['муте', 'делит', 'сетап'];
+        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                        interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers);
+
+        // Проверяем: если есть канал команд и пользователь НЕ админ — разрешаем только в том канале
+        if (config?.commandsChannelId && !isAdmin && !adminOnlyCommands.includes(commandName)) {
+            if (interaction.channelId !== config.commandsChannelId) {
+                return interaction.reply({
+                    content: `❌ Команды можно использовать только в <#${config.commandsChannelId}>`,
+                    ephemeral: true
+                });
+            }
+        }
+
         if (commandName === 'сетап') {
             await interaction.reply({ content: 'Начинаю настройку...', ephemeral: true });
             await handleSetup(interaction.guild!);
-            await interaction.followUp({ content: 'Настройка завершена!', ephemeral: true });
+            await interaction.followUp({ content: '✅ Настройка завершена!', ephemeral: true });
         } else if (commandName === 'муте') {
             await handleMute(interaction);
         } else if (commandName === 'делит') {
